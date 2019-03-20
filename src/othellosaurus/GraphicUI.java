@@ -41,6 +41,7 @@ public class GraphicUI extends JFrame implements ActionListener, ChangeListener 
 	private final JSlider timeSlider;
 
 	public boolean locked = false;
+	public boolean setUpDone = false;
 	private String outputText;
 
 	// Agents controlling white and black
@@ -86,7 +87,7 @@ public class GraphicUI extends JFrame implements ActionListener, ChangeListener 
 		setTitle("Othello");
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		JPanel main = new JPanel();
-		main.setLayout(new BorderLayout());
+		main.setLayout(new BorderLayout(2, 0));
 
 		JPanel board = new JPanel();
 		board.setLayout(new GridLayout(8, 8));
@@ -104,9 +105,9 @@ public class GraphicUI extends JFrame implements ActionListener, ChangeListener 
 
 		computerOutput = new JLabel(" ", SwingConstants.LEFT);
 		computerOutput.setVerticalAlignment(SwingConstants.TOP);
-		computerOutput.setMaximumSize(new java.awt.Dimension(220, 440));
-        computerOutput.setMinimumSize(new java.awt.Dimension(220, 480));
-        computerOutput.setPreferredSize(new java.awt.Dimension(220, 440));
+		computerOutput.setMaximumSize(new java.awt.Dimension(215, 440));
+        computerOutput.setMinimumSize(new java.awt.Dimension(215, 480));
+        computerOutput.setPreferredSize(new java.awt.Dimension(215, 440));
         computerOutput.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
 
         textDisplay = new JLabel(" ");
@@ -121,6 +122,9 @@ public class GraphicUI extends JFrame implements ActionListener, ChangeListener 
 
 		JPanel buttonPanel = new JPanel();
 		buttonPanel.setLayout(new FlowLayout());
+        JButton startButton = new JButton("Start");
+		startButton.addActionListener(this);
+		buttonPanel.add(startButton);
 		JButton newGameButton = new JButton("New Game");
 		newGameButton.addActionListener(this);
 		buttonPanel.add(newGameButton);
@@ -206,11 +210,18 @@ public class GraphicUI extends JFrame implements ActionListener, ChangeListener 
 
 	/** Sets the text on the textDisplay to the board's score */
 	public void setText() {
-		textDisplay.setText((gameBoard.gameOver ? "<HTML> Game Over!  <BR>" : "<HTML>")
-			+ "White Score = " + Utils.bitCount(gameBoard.pieces[Board.WHITE])
-			+ "<BR> Black Score = " + Utils.bitCount(gameBoard.pieces[Board.BLACK])
-		  + (gameBoard.gameOver ? "" : "<BR> "
-			+ (gameBoard.mover == Board.WHITE ? "White" : "Black") + " to move</HTML>"));
+        String score = "White Score = " + Utils.bitCount(gameBoard.pieces[Board.WHITE])
+                     + "<br>Black Score = " + Utils.bitCount(gameBoard.pieces[Board.BLACK])
+                     + "</html>";
+        String text = "<html>";
+        if(!setUpDone) {
+            text += "Click on a square to add a hole<br>on the board, then press the<br>Start button to play</html>";
+        } else if(gameBoard.gameOver) {
+            text += "Game Over!<br>" + score;
+        } else {
+            text += (gameBoard.mover == Board.WHITE ? "White" : "Black") + "'s turn<br>" + score;
+        }
+		textDisplay.setText(text);
 		paintSquares();
 	}
 
@@ -219,6 +230,7 @@ public class GraphicUI extends JFrame implements ActionListener, ChangeListener 
 		super.repaint();
 		for(int x = 0; x < 8; x++) {
 			for(int y = 0; y < 8; y++) {
+                squares[x][y].setBackground(new Color(25, 140, 50));
 				squares[x][y].repaint();
 			}
 		}
@@ -245,11 +257,20 @@ public class GraphicUI extends JFrame implements ActionListener, ChangeListener 
 
 	/** User input */
 	public void actionPerformed(ActionEvent e) {
-		if(e.getActionCommand().equals("New Game")) {
-			// restart game
+        if(e.getActionCommand().equals("Start")) {
+            // start game
+            if(!setUpDone) {
+                setUpDone = true;
+                setText();
+                paintSquares();
+            }
+		} else if(e.getActionCommand().equals("New Game")) {
+			// reset game
 			gameHistory.clear();
+            setUpDone = false;
 			gameBoard = new Board();
 			setText();
+            computerOutput.setText("");
 			paintSquares();
 		} else if(e.getActionCommand().equals("Take Back Move")) {
 			// take back last move
@@ -259,6 +280,12 @@ public class GraphicUI extends JFrame implements ActionListener, ChangeListener 
 				paintSquares();
 			}
 		} else if(e.getActionCommand().equals("Computer Move")) {
+            // start game if it hasn't started already
+            if(!setUpDone) {
+                setUpDone = true;
+                setText();
+                paintSquares();
+            }
 			// have AI move
 			if(!gameBoard.gameOver) {
 				if (gameBoard.mover == Board.WHITE) {
@@ -289,6 +316,7 @@ public class GraphicUI extends JFrame implements ActionListener, ChangeListener 
 			this.x = x;
 			this.y = y;
 			setPreferredSize(new Dimension(SQUARE_LENGTH, SQUARE_LENGTH));
+            setMaximumSize(new Dimension(SQUARE_LENGTH, SQUARE_LENGTH));
 			setBackground(new Color(25, 140, 50));
 			setBorder(BorderFactory.createLineBorder(new Color(5, 30, 10)));
 			addMouseListener(this);
@@ -299,10 +327,14 @@ public class GraphicUI extends JFrame implements ActionListener, ChangeListener 
 			super.paintComponent(g);
 			int piece = gameBoard.pieceAt(x, y);
 			if(piece != -1) {
-				g.setColor(piece == Board.WHITE ? Color.white : Color.black);
-				g.fillOval(PIECE_BUFFER, PIECE_BUFFER,
-					SQUARE_LENGTH - 2*PIECE_BUFFER,
-					SQUARE_LENGTH - 2*PIECE_BUFFER);
+				if(piece == Board.HOLE) {
+			        setBackground(new Color(5, 30, 10));
+			    } else {
+			        g.setColor(piece == Board.WHITE ? Color.white : Color.black);
+	                g.fillOval(PIECE_BUFFER, PIECE_BUFFER,
+	                        SQUARE_LENGTH - 2*PIECE_BUFFER,
+	                        SQUARE_LENGTH - 2*PIECE_BUFFER);
+			    }
 			} else if(gameBoard.moveLegal(x, y)) {
 				g.setColor(new Color(75, 255, 150));
 				g.drawLine(X_BUFFER, X_BUFFER,
@@ -316,7 +348,15 @@ public class GraphicUI extends JFrame implements ActionListener, ChangeListener 
 
 		/** Allows a human player to move by clicking on the square. */
 		public void mouseClicked(MouseEvent e) {
-			tryMove(x, y);
+		    if (!setUpDone && gameBoard.pieceAt(x, y) == -1) {
+		        gameHistory.push(gameBoard);
+		        
+		        gameBoard = new Board(gameBoard, x, y);
+	            setText();
+	            paintSquares();
+		    } else {
+		        tryMove(x, y);
+		    }
 		}
 
 		public void mousePressed(MouseEvent e) {}

@@ -8,6 +8,7 @@ import java.util.Arrays;
 public class Board implements Comparable<Board> {
 	public static final int WHITE = 0;
 	public static final int BLACK = 1;
+	public static final int HOLE = 2;
 	public static final int PASS = -1;
 	
 	// the starting configuration, used mainly for testing purposes
@@ -25,8 +26,8 @@ public class Board implements Comparable<Board> {
 		 
 	public int mover; // current player to move
 	public int opponent; // the other player 
-	public long[] pieces = new long[2]; // bitboards representing the pieces on the
-										// board (one for white pieces, one for black)
+	public long[] pieces = new long[3]; // bitboards representing the pieces on the board
+										// (one for white pieces, one for black, and one for holes)
 	
 	public boolean gameOver; // whether this game is over
 	public int lastMove; // the last move played on this board
@@ -66,6 +67,9 @@ public class Board implements Comparable<Board> {
 				} else if(startConfig[configIndex] == 2) {
 					pieces[BLACK] |= (1L << boardIndex);
 					numPieces++;
+				} else if(startConfig[configIndex] == 3) {
+				    pieces[HOLE] |= (1L << boardIndex);
+				    numPieces++;
 				}
 			}
 		}
@@ -82,11 +86,34 @@ public class Board implements Comparable<Board> {
 	public Board(Board b) {
 		mover = b.mover;
 		opponent = b.opponent;
-		pieces = Arrays.copyOf(b.pieces, 2);
+		pieces = Arrays.copyOf(b.pieces, 3);
 		gameOver = b.gameOver;
 		legalMoves = b.legalMoves;
 		lastMove = b.lastMove;
 		numPieces = b.numPieces;
+	}
+    
+    /**
+	 * Creates new board given the location of the hole to add to the Board
+	 */
+	public Board(Board b, int x, int y) {
+        mover = b.mover;
+        opponent = b.opponent;
+        pieces = Arrays.copyOf(b.pieces, 3);
+        gameOver = b.gameOver;
+        lastMove = b.lastMove;
+        numPieces = b.numPieces;
+         
+        int boardIndex = Utils.getIndex(x, y);
+        pieces[HOLE] |= (1L << boardIndex);
+        numPieces++;
+        
+        legalMoves = getMoves(mover);
+        
+        // check if the game is over
+        if (legalMoves == 0 && getMoves(opponent) == 0) {
+            gameOver = true;
+        }
 	}
 	
 	/**
@@ -96,7 +123,7 @@ public class Board implements Comparable<Board> {
 		// copy fields over
 		mover = lastBoard.opponent;
 		opponent = lastBoard.mover;
-		pieces = Arrays.copyOf(lastBoard.pieces, 2);
+		pieces = Arrays.copyOf(lastBoard.pieces, 3);
 		numPieces = lastBoard.numPieces;
 		lastMove = move;
 		
@@ -159,6 +186,7 @@ public class Board implements Comparable<Board> {
 		long pNegated = ~pieces[p];
 		long oPieces = pieces[o];
 		long oNegated = ~pieces[o];
+        long hNegated = ~pieces[HOLE];
 		// try all directions (right, up, upright, upleft) forward and backward
 		for(int direction = 0; direction < 4; direction++) {
 			for(int orientation = 0; orientation < 2; orientation++) {
@@ -172,11 +200,13 @@ public class Board implements Comparable<Board> {
 				potentials = (orientation == 0 ? potentials >>> shift : potentials << shift);
 				potentials &= pNegated;
 				potentials &= oPieces;
+                potentials &= hNegated;
 				
 				while(potentials != 0) {
 					potentials &= border;
 					potentials = (orientation == 0 ? potentials >>> shift : potentials << shift);
 					potentials &= pNegated;
+                    potentials &= hNegated;
 					m |= (potentials & oNegated);
 					potentials &= oPieces;
 				}
@@ -240,6 +270,8 @@ public class Board implements Comparable<Board> {
 			return WHITE;
 		} else if((pieces[BLACK] & mask) != 0) {
 			return BLACK;
+		} else if((pieces[HOLE] & mask) != 0) {
+		    return HOLE;
 		}
 		return -1;
 	}
@@ -256,6 +288,8 @@ public class Board implements Comparable<Board> {
 		    		config += "1, ";
 		    	} else if(pieceAt(x, y) == BLACK) {
 		    		config += "2, ";
+		    	} else if(pieceAt(x, y) == HOLE) {
+		    	    config += "3, ";
 		    	} else {
 		    		config += "0, ";
 		    	}
